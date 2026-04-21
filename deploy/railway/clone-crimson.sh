@@ -1,0 +1,42 @@
+#!/bin/sh
+# Clone the `crimson` submodule (see .gitmodules).
+#
+# Env:
+#   CRIMSON_GIT_URL   — optional override of clone URL
+#   CRIMSON_GIT_REF   — branch, tag, or commit (default: master)
+#   CRIMSON_SSH_KEY_PATH — optional path to a private SSH key file. When it exists and
+#     is non-empty, the clone URL is used as-is for git+ssh (no HTTPS rewrite). Railway
+#     supplies this via Dockerfile RUN + ARG CRIMSON_GIT_SSH_KEY_B64 (see Dockerfiles).
+
+set -eu
+
+url="${CRIMSON_GIT_URL:-}"
+if [ -z "$url" ]; then
+  url=$(git config -f .gitmodules submodule.crimson.url)
+fi
+
+ref="${CRIMSON_GIT_REF:-master}"
+KEY_PATH="${CRIMSON_SSH_KEY_PATH:-/run/secrets/crimson_git_ssh_key}"
+
+if [ -f "$KEY_PATH" ] && [ -s "$KEY_PATH" ]; then
+  mkdir -p /root/.ssh
+  cp "$KEY_PATH" /root/.ssh/crimson_git
+  chmod 600 /root/.ssh/crimson_git
+  clone_host=$(printf '%s' "$url" | sed -n 's/^git@\([^:]*\):.*/\1/p')
+  if [ -n "$clone_host" ]; then
+    ssh-keyscan -t rsa,ecdsa,ed25519 "$clone_host" 2>/dev/null >> /root/.ssh/known_hosts || true
+  fi
+  export GIT_SSH_COMMAND="ssh -i /root/.ssh/crimson_git -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+  git clone "$url" crimson
+else
+  case "$url" in
+    git@github.com:*)
+      gh="${url#git@github.com:}"
+      gh="${gh%.git}"
+      url="https://github.com/${gh}.git"
+      ;;
+  esac
+  git clone "$url" crimson
+fi
+
+git -C crimson checkout "$ref"

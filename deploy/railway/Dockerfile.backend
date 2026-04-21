@@ -1,0 +1,46 @@
+# Fetches the `crimson` Git submodule inside the image (see `.gitmodules`).
+#
+# Build args:
+#   CRIMSON_GIT_REF — branch, tag, or commit (default: master). Pin to the submodule
+#     commit in the parent repo when you want reproducible builds.
+#   CRIMSON_GIT_URL — optional full clone URL (e.g. HTTPS with a token for private repos).
+#
+# Private submodule over SSH (Railway): add a **service variable** (mark as Secret)
+# named `CRIMSON_GIT_SSH_KEY_B64` whose value is your **private** deploy key as one line
+# of base64 (Railway: Variables on the service; enable “Secret” for the variable).
+# Add the matching **public** key as a read-only Deploy key on the GitHub repo.
+# Omit for public HTTPS clones.
+#
+# Build context: repository root (must include `.gitmodules` and `deploy/railway/`).
+
+FROM alpine/git:latest AS crimson-src
+RUN apk add --no-cache openssh-client
+WORKDIR /src
+COPY .gitmodules .
+COPY deploy/railway/clone-crimson.sh ./clone-crimson.sh
+ARG CRIMSON_GIT_URL
+ARG CRIMSON_GIT_REF=master
+ARG CRIMSON_GIT_SSH_KEY_B64
+ENV CRIMSON_GIT_URL=${CRIMSON_GIT_URL}
+ENV CRIMSON_GIT_REF=${CRIMSON_GIT_REF}
+RUN set -eu; \
+    if [ -n "${CRIMSON_GIT_SSH_KEY_B64:-}" ]; then \
+      mkdir -p /root/.ssh; \
+      printf '%s' "$CRIMSON_GIT_SSH_KEY_B64" | base64 -d > /root/.ssh/crimson_git; \
+      chmod 600 /root/.ssh/crimson_git; \
+      export CRIMSON_SSH_KEY_PATH=/root/.ssh/crimson_git; \
+    fi; \
+    sh ./clone-crimson.sh
+
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY --from=crimson-src /src/crimson/backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY --from=crimson-src /src/crimson/backend/ .
+
+EXPOSE 8422
+
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8422}"]

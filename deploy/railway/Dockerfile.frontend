@@ -1,0 +1,44 @@
+# Fetches the `crimson` Git submodule inside the image (see `.gitmodules`).
+# Same build args / `CRIMSON_GIT_SSH_KEY_B64` Railway variable as Dockerfile.backend.
+#
+# Runtime: set BACKEND_ORIGIN to your backend base URL (no trailing slash), e.g.
+#   http://<backend-service>.railway.internal:8422
+# Railway sets PORT for the HTTP listener.
+#
+# Build context: repository root (must include `.gitmodules` and `deploy/railway/`).
+
+FROM alpine/git:latest AS crimson-src
+RUN apk add --no-cache openssh-client
+WORKDIR /src
+COPY .gitmodules .
+COPY deploy/railway/clone-crimson.sh ./clone-crimson.sh
+ARG CRIMSON_GIT_URL
+ARG CRIMSON_GIT_REF=master
+ARG CRIMSON_GIT_SSH_KEY_B64
+ENV CRIMSON_GIT_URL=${CRIMSON_GIT_URL}
+ENV CRIMSON_GIT_REF=${CRIMSON_GIT_REF}
+RUN set -eu; \
+    if [ -n "${CRIMSON_GIT_SSH_KEY_B64:-}" ]; then \
+      mkdir -p /root/.ssh; \
+      printf '%s' "$CRIMSON_GIT_SSH_KEY_B64" | base64 -d > /root/.ssh/crimson_git; \
+      chmod 600 /root/.ssh/crimson_git; \
+      export CRIMSON_SSH_KEY_PATH=/root/.ssh/crimson_git; \
+    fi; \
+    sh ./clone-crimson.sh
+
+FROM node:20-alpine AS build
+WORKDIR /src/crimson/frontend
+
+COPY --from=crimson-src /src/crimson/frontend/package.json /src/crimson/frontend/package-lock.json ./
+RUN npm ci --legacy-peer-deps
+
+COPY --from=crimson-src /src/crimson/frontend/ ./
+RUN npm run build
+
+FROM nginx:1.27-alpine
+
+COPY --from=build /src/crimson/frontend/dist /usr/share/nginx/html
+COPY deploy/railway/nginx-frontend.conf.template /etc/nginx/templates/default.conf.template
+
+ENV PORT=8080
+ENV BACKEND_ORIGIN=http://127.0.0.1:8422

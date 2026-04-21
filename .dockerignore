@@ -1,0 +1,10 @@
+# Submodule content is cloned inside the image; omit from context to keep uploads small.
+crimson
+
+.git
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+**/*.pyc
+.venv
+venv
