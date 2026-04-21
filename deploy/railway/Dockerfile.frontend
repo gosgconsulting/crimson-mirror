@@ -33,7 +33,13 @@ COPY --from=crimson-src /src/crimson/frontend/package.json /src/crimson/frontend
 RUN npm ci --legacy-peer-deps
 
 COPY --from=crimson-src /src/crimson/frontend/ ./
-RUN npm run build
+# API endpoints without editing the submodule: see deploy/railway/vite.railway.config.ts
+COPY deploy/railway/vite.railway.config.ts ./vite.railway.config.ts
+ARG VITE_API_PROXY_TARGET=http://localhost:8422
+ARG VITE_API_BASE=/api/v2
+ENV VITE_API_PROXY_TARGET=${VITE_API_PROXY_TARGET}
+ENV VITE_API_BASE=${VITE_API_BASE}
+RUN npx vite build --config vite.railway.config.ts
 
 FROM nginx:1.27-alpine
 
