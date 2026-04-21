@@ -1,0 +1,3 @@
+[submodule "crimson"]
+	path = crimson
+	url = git@github.com:omarlebda/french.git
