@@ -17,16 +17,20 @@ fi
 
 ref="${CRIMSON_GIT_REF:-master}"
 KEY_PATH="${CRIMSON_SSH_KEY_PATH:-/run/secrets/crimson_git_ssh_key}"
+identity=/root/.ssh/crimson_git
 
 if [ -f "$KEY_PATH" ] && [ -s "$KEY_PATH" ]; then
   mkdir -p /root/.ssh
-  cp "$KEY_PATH" /root/.ssh/crimson_git
-  chmod 600 /root/.ssh/crimson_git
+  # Dockerfile may already decode the key to $identity; avoid cp onto itself.
+  if [ "$KEY_PATH" != "$identity" ]; then
+    cp "$KEY_PATH" "$identity"
+  fi
+  chmod 600 "$identity"
   clone_host=$(printf '%s' "$url" | sed -n 's/^git@\([^:]*\):.*/\1/p')
   if [ -n "$clone_host" ]; then
     ssh-keyscan -t rsa,ecdsa,ed25519 "$clone_host" 2>/dev/null >> /root/.ssh/known_hosts || true
   fi
-  export GIT_SSH_COMMAND="ssh -i /root/.ssh/crimson_git -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+  export GIT_SSH_COMMAND="ssh -i ${identity} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
   git clone "$url" crimson
 else
   case "$url" in
