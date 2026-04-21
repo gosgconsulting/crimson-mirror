@@ -3,7 +3,8 @@
 #
 # Env:
 #   CRIMSON_GIT_URL   — optional override of clone URL
-#   CRIMSON_GIT_REF   — branch, tag, or commit (default: master)
+#   CRIMSON_GIT_REF   — optional branch, tag, or commit. If unset or empty, the clone
+#     stays on the remote default branch (avoids assuming `master` vs `main`).
 #   CRIMSON_SSH_KEY_PATH — optional path to a private SSH key file. When it exists and
 #     is non-empty, the clone URL is used as-is for git+ssh (no HTTPS rewrite). Railway
 #     supplies this via Dockerfile RUN + ARG CRIMSON_GIT_SSH_KEY_B64 (see Dockerfiles).
@@ -15,7 +16,6 @@ if [ -z "$url" ]; then
   url=$(git config -f .gitmodules submodule.crimson.url)
 fi
 
-ref="${CRIMSON_GIT_REF:-master}"
 KEY_PATH="${CRIMSON_SSH_KEY_PATH:-/run/secrets/crimson_git_ssh_key}"
 identity=/root/.ssh/crimson_git
 
@@ -43,4 +43,6 @@ else
   git clone "$url" crimson
 fi
 
-git -C crimson checkout "$ref"
+if [ -n "${CRIMSON_GIT_REF:-}" ]; then
+  git -C crimson checkout "$CRIMSON_GIT_REF"
+fi

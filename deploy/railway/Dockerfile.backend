@@ -1,8 +1,8 @@
 # Fetches the `crimson` Git submodule inside the image (see `.gitmodules`).
 #
 # Build args:
-#   CRIMSON_GIT_REF — branch, tag, or commit (default: master). Pin to the submodule
-#     commit in the parent repo when you want reproducible builds.
+#   CRIMSON_GIT_REF — optional branch, tag, or commit. If unset, clone uses the remote’s
+#     default branch. Set this to pin (e.g. the submodule SHA from the parent repo).
 #   CRIMSON_GIT_URL — optional full clone URL (e.g. HTTPS with a token for private repos).
 #
 # Private submodule over SSH (Railway): add a **service variable** (mark as Secret)
@@ -19,7 +19,7 @@ WORKDIR /src
 COPY .gitmodules .
 COPY deploy/railway/clone-crimson.sh ./clone-crimson.sh
 ARG CRIMSON_GIT_URL
-ARG CRIMSON_GIT_REF=master
+ARG CRIMSON_GIT_REF
 ARG CRIMSON_GIT_SSH_KEY_B64
 ENV CRIMSON_GIT_URL=${CRIMSON_GIT_URL}
 ENV CRIMSON_GIT_REF=${CRIMSON_GIT_REF}
